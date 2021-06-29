@@ -54,7 +54,8 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 install(PROGRAMS
   src/detectron2_ros
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  src/centermask2_ros
+DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
 ## Mark cpp header files for installation
