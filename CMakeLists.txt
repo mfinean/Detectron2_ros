@@ -6,6 +6,7 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
   std_msgs
   sensor_msgs
+  finean_msgs
 )
 
 ## System dependencies are found with CMake's conventions
@@ -20,8 +21,8 @@ catkin_python_setup()
 add_message_files(
   FILES
   Result.msg
-  PersonPosition.msg
-  PersonPositions.msg
+  # PersonPosition.msg
+  # PersonPositions.msg
   )
 
 generate_messages(

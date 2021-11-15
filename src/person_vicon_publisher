@@ -20,8 +20,10 @@ from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import Transform
 from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Vector3
+from geometry_msgs.msg import PointStamped
 
-from detectron2_ros.msg import PersonPositions, PersonPosition
+# from detectron2_ros.msg import PersonPositions, PersonPosition
+from finean_msgs.msg import PersonPositions, PersonPosition
 
 # For sync depth and rgb
 import message_filters
@@ -110,9 +112,10 @@ class PersonViconPublisher(object):
     def __init__(self):
         rospy.logwarn("Initializing")
              
-        self._vicon_sub = message_filters.Subscriber(self.load_param('~vicon_person'), TransformStamped)
+        # self._vicon_sub = message_filters.Subscriber(self.load_param('~vicon_person'), TransformStamped)
         self._tracking_sub = message_filters.Subscriber(self.load_param('~person_tracking'), PersonPositions)
-    
+        self.global_frame = self.load_param('~global_frame')
+
         self._tfBuffer = tf2.Buffer()
         self._listener = tf2.TransformListener(self._tfBuffer)
 
@@ -120,13 +123,15 @@ class PersonViconPublisher(object):
         self.ts = message_filters.ApproximateTimeSynchronizer([self._tracking_sub], 1, 0.20) 
         self.ts.registerCallback(self.callback_images)
 
-        self._marker_pub = rospy.Publisher("/visualization_marker", Marker, queue_size = 2)
+        # self._marker_pub = rospy.Publisher("/visualization_marker", Marker, queue_size = 2)
+        self._point_pub = rospy.Publisher("/rgbd_person_position", PointStamped, queue_size = 2)
+        
         rospy.loginfo("PersonViconPublisher Initialized")
 
     def publish_rviz_marker(self, xyz):
         marker = Marker()
 
-        marker.header.frame_id = "/vicon/world"
+        marker.header.frame_id = self.global_frame
         marker.header.stamp = rospy.Time.now()
 
         # set shape, Arrow: 0; Cube: 1 ; Sphere: 2 ; Cylinder: 3
@@ -155,23 +160,35 @@ class PersonViconPublisher(object):
 
         self._marker_pub.publish(marker)
 
+    def publish_point_msg(self, xyz, tstamp):
+        point = PointStamped()
+        point.header.stamp = tstamp
+        point.header.frame_id = self.global_frame
+        point.point.x = xyz[0]
+        point.point.y = xyz[1] 
+        point.point.z = 0
+
+        self._point_pub.publish(point)
+
     # def callback_images(self, vicon_msg, tracking_msg):
     def callback_images(self, tracking_msg):
-        rospy.loginfo("callback_images")
+        # rospy.loginfo("callback_images")
         try:
 
             # vicon_person = msg_to_se3(vicon_msg)
             
             # trans = self._tfBuffer.lookup_transform('vicon/world', 'head_rgbd_sensor_rgb_frame', vicon_msg.header.stamp)
-            # world_T_head = msg_to_se3(self._tfBuffer.lookup_transform('vicon/world', 'head_rgbd_sensor_rgb_frame', rospy.Time()))
-            world_T_head = msg_to_se3(self._tfBuffer.lookup_transform('vicon/world', 'camera_depth_optical_frame', rospy.Time()))
+            
+            world_T_head = msg_to_se3(self._tfBuffer.lookup_transform(self.global_frame, 'head_rgbd_sensor_rgb_frame', tracking_msg.header.stamp))
+            
+            # world_T_head = msg_to_se3(self._tfBuffer.lookup_transform('vicon/world', 'camera_depth_optical_frame', rospy.Time()))
             
             transforms = {}
             dists = []
 
 
             num_people_detected = len(tracking_msg.positions)
-            print("Number of positions found {0}".format(num_people_detected))
+            # print("Number of positions found {0}".format(num_people_detected))
             # For each person found in ther image
             if num_people_detected > 0:
                 for i in range(num_people_detected):
@@ -182,12 +199,17 @@ class PersonViconPublisher(object):
                     world_T_person = np.dot(world_T_head, head_T_person)
                     # dists.append(np.linalg.norm(vicon_person[0:3,3] - world_T_person[0:3,3]))
                     transforms[i] = world_T_person
+                    self.publish_point_msg(world_T_person[0:3,3], tracking_msg.header.stamp)
 
                 # best_ind = np.argmin(np.array(dists))    
                 # self.publish_rviz_marker(transforms[best_ind][0:3,3])
-                self.publish_rviz_marker(transforms[0][0:3,3])
                 # print(transforms[best_ind][0:3,3] - )
                 # print("Error: {0}m".format(dists[best_ind]))
+
+
+                # self.publish_rviz_marker(transforms[0][0:3,3])
+                # self.publish_point_msg(transforms[0][0:3,3])
+
         except Exception as e:
             print(e)
 

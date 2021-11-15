@@ -9,6 +9,7 @@ import rospy
 from centermask.config import get_cfg
 from detectron2.data import MetadataCatalog
 from cv_bridge import CvBridge, CvBridgeError
+
 # import some common detectron2 utilities
 from detectron2.engine import DefaultPredictor
 from detectron2.utils.logger import setup_logger
@@ -17,7 +18,8 @@ from detectron2_ros.msg import Result
 from sensor_msgs.msg import Image, RegionOfInterest, CameraInfo
 import pyrealsense2 as rs2
 
-from detectron2_ros.msg import PersonPositions, PersonPosition
+# from detectron2_ros.msg import PersonPositions, PersonPosition
+from finean_msgs.msg import PersonPositions, PersonPosition
 
 # For sync depth and rgb
 import message_filters
@@ -39,7 +41,7 @@ class Centermask2node(object):
         self._msg_lock = threading.Lock()
         self._image_counter = 0
 
-        self.score_thresh = 0.65
+        self.score_thresh = 0.50
         self.removal_classes = ['person', 'chair']
 
         self.cfg = get_cfg()
@@ -53,13 +55,14 @@ class Centermask2node(object):
         self._result_pub = rospy.Publisher('~result', Result, queue_size=1)
         self._vis_pub = rospy.Publisher('~visualization', Image, queue_size=1)
         self._static_depth_img_pub = rospy.Publisher('~static_depth_image', Image, queue_size=1)
-
+        self._static_depth_info_pub = rospy.Publisher(self.load_param('~static_depth_camera_info'), CameraInfo, queue_size=1)
+        self.camera_info_msg   = None
 
         self._person_pos_pub = rospy.Publisher(self.load_param('~person_positions'), PersonPositions, queue_size=1)
-        # self.getIntrinsics()
+        self.getIntrinsics()
 
         # self.getManualHSRIntrinsics()
-        self.getManualRealsenseIntrinsics()
+        # self.getManualRealsenseIntrinsics()
 
         self._image_sub = message_filters.Subscriber(self.load_param('~rgb_input'), Image)
         self._depth_sub = message_filters.Subscriber(self.load_param('~depth_input'), Image)
@@ -112,11 +115,12 @@ class Centermask2node(object):
         self.intrinsics.fy = 618.9261474609375
         self.intrinsics.model = rs2.distortion.brown_conrady
 
-
     def getIntrinsics(self):
         # Get camera info
         rospy.loginfo("Updating camera info")
         cameraInfo = rospy.wait_for_message(self.load_param('~camera_info'), CameraInfo, 60)
+        
+        self.camera_info_msg = cameraInfo
 
         self.intrinsics = rs2.intrinsics()
         self.intrinsics.width = cameraInfo.width
@@ -129,7 +133,6 @@ class Centermask2node(object):
         rospy.loginfo("Camera intrinsics set.")
 
     def run(self):
-        # rospy.loginfo("Run")
 
         if self._msg_lock.acquire(False):
             img_msg = self._last_rgb_msg
@@ -140,22 +143,22 @@ class Centermask2node(object):
         else:
             return
 
-        # rospy.loginfo("Run else")
-
         self._image_counter = self._image_counter + 1
         if (self._image_counter % 11) == 10:
             rospy.loginfo("Images detected per second=%.2f",
                             float(self._image_counter) / (time.time() - self.start_time))
 
-        # np_image = self._bridge.compressed_imgmsg_to_cv2(img_msg)
+        # Convert images
         np_image = self.convert_to_cv_image(img_msg)
         np_depth_image = self.convert_to_cv_image(depth_msg)
 
-        # print(np_image.shape)
+        # Get the masks and objects seen
         outputs = self.predictor(np_image)
         result = outputs["instances"].to("cpu")
+        
         result_msg = self.getResult(result)
-
+        
+        # Publish summary results
         self._result_pub.publish(result_msg)
         
         # Mask out people with score greater than threshold
@@ -165,18 +168,36 @@ class Centermask2node(object):
         result = result[retain_inds]
 
         # For each mask
-        if sum(retain_inds) > 0:
-            all_person_positions_msg = PersonPositions()
-            all_person_positions_msg.header = depth_msg.header
+        static_depth_img = np_depth_image.copy()
+        kernel = np.ones((5,5),np.uint8)
+
+        num_inds = sum(retain_inds)
+        print("Number of masks: {0}".format(num_inds))
+        all_person_positions_msg = PersonPositions()
+        all_person_positions_msg.header = depth_msg.header
+        if num_inds > 0:
+
             masks = np.asarray(result.pred_masks)
-            for i in range(sum(retain_inds)):
+            for i in range(num_inds):
                 mask = masks[i]
                 person_position_msg = self.convertPixelToPosition(np_depth_image, mask)
                 all_person_positions_msg.positions.append(person_position_msg)
-                rospy.loginfo("Publishing person position")
 
-                self._person_pos_pub.publish(all_person_positions_msg)
-                # print("Person {0} at {1}".format(i, person_pos))
+                # Get the static depth image 
+                static_depth_img[(cv.dilate(np.float32(mask),kernel,iterations = 2)).astype(bool)]=0
+
+        static_depth_image_msg = self._bridge.cv2_to_imgmsg(static_depth_img)
+        static_depth_image_msg.header = depth_msg.header
+        self.camera_info_msg.header = depth_msg.header
+
+        self._static_depth_img_pub.publish(static_depth_image_msg)
+        self._static_depth_info_pub.publish(self.camera_info_msg)
+
+        # print("Person {0} at {1}".format(i, person_pos))
+
+        # rospy.loginfo("Publishing person position")
+        self._person_pos_pub.publish(all_person_positions_msg)        
+
 
         # Visualize results
         if self._visualization:
@@ -186,7 +207,6 @@ class Centermask2node(object):
 
             image_msg = self._bridge.cv2_to_imgmsg(img)
             self._vis_pub.publish(image_msg)
-
 
     def getResult(self, predictions):
 

@@ -11,6 +11,9 @@
   <arg name="person_positions" default="person_positions" />
   <arg name="static_depth_camera_info" default="/centermask2_depth_ros/camera_info" />
 
+  <!-- <arg name="global_frame" default="/vicon/world" /> -->
+  <arg name="global_frame" default="/vicon/world" />
+
   <node name="centermask2_depth_ros"  pkg="detectron2_ros" type="centermask2_depth_ros" output="screen" >
     <param name="rgb_input" value="$(arg rgb_input)" />
     <param name="depth_input" value="$(arg depth_input)" />
@@ -23,4 +26,14 @@
     <param name="static_depth_camera_info" value="$(arg static_depth_camera_info)" />
     <param name="person_positions" value="$(arg person_positions)" />
   </node>
+
+  <arg name="person_tracking" default="/person_positions" />
+  <arg name="vicon_person" default="/vicon/person_1/person_1" />
+
+  <node name="person_vicon_publisher"  pkg="detectron2_ros" type="person_vicon_publisher" output="screen" >
+    <param name="vicon_person" value="$(arg vicon_person)" />
+    <param name="person_tracking" value="$(arg person_positions)" />
+    <param name="global_frame" value="$(arg global_frame)" />
+  </node>
+
 </launch>
