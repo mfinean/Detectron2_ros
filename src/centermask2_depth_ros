@@ -172,7 +172,7 @@ class Centermask2node(object):
         kernel = np.ones((5,5),np.uint8)
 
         num_inds = sum(retain_inds)
-        print("Number of masks: {0}".format(num_inds))
+        # print("Number of masks: {0}".format(num_inds))
         all_person_positions_msg = PersonPositions()
         all_person_positions_msg.header = depth_msg.header
         if num_inds > 0:
