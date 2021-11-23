@@ -1,0 +1,32 @@
+<launch>
+  <arg name="rgb_input" default="ViMantic/ToCNN" />
+  <!-- Note that this needs to be a depth image that is aligned to the rgb image so that the masks match up -->
+  <arg name="depth_input" default="ViMantic/ToCNN" /> 
+  <arg name="detection_threshold" default="0.5" />
+  <arg name="config" default="$(find detectron2_ros)/detectron2/configs/COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x.yaml" />
+  <arg name="model" default="detectron2://COCO-InstanceSegmentation/mask_rcnn_R_50_FPN_3x/137849600/model_final_f10217.pkl" />
+  <arg name="visualization" default="true" />
+  <arg name="static_depth_image" default="static_depth_image" />
+  <arg name="camera_info" default="camera_info" />
+  <arg name="person_positions" default="/person_positions" />
+  <arg name="static_depth_camera_info" default="/centermask2_depth_ros/camera_info" />
+
+  <arg name="global_frame" default="/odom" />
+
+  <node name="centermask2_depth_ros"  pkg="detectron2_ros" type="centermask2_depth_ros" output="screen" >
+    <param name="rgb_input" value="$(arg rgb_input)" />
+    <param name="depth_input" value="$(arg depth_input)" />
+    <param name="detection_threshold" value="$(arg detection_threshold)" />
+    <param name="config" value="$(arg config)" />
+    <param name="model" value="$(arg model)" />
+    <param name="visualization" value="$(arg visualization)" />
+    <param name="static_depth_image" value="$(arg static_depth_image)" />
+    <param name="camera_info" value="$(arg camera_info)" />
+    <param name="static_depth_camera_info" value="$(arg static_depth_camera_info)" />
+    <param name="person_positions" value="$(arg person_positions)" />
+  </node>
+
+  <!-- <node name="person_publisher"  pkg="detectron2_ros" type="person_publisher" output="screen" > -->
+  <!-- </node> -->
+
+</launch>
