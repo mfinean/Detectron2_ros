@@ -61,6 +61,7 @@ install(PROGRAMS
   src/centermask2_depth_ros
   src/centermask2_depth_ros_compressed
   src/person_vicon_publisher
+  src/person_publisher
 DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

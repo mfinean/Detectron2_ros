@@ -184,7 +184,7 @@ class Centermask2node(object):
                 all_person_positions_msg.positions.append(person_position_msg)
 
                 # Get the static depth image 
-                static_depth_img[(cv.dilate(np.float32(mask),kernel,iterations = 2)).astype(bool)]=0
+                static_depth_img[(cv.dilate(np.float32(mask),kernel,iterations = 4)).astype(bool)]=0
 
         static_depth_image_msg = self._bridge.cv2_to_imgmsg(static_depth_img)
         static_depth_image_msg.header = depth_msg.header
